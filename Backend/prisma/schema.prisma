@@ -1,0 +1,59 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int                @id @default(autoincrement())
+  username     String             @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime           @default(now())
+
+  pointTransactions PointTransaction[]
+  donations         Donation[]
+}
+
+model PointTransaction {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  amount    Int      // signed: +earn, -spend
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+enum TokenType {
+  BANK
+  DONATION
+}
+
+model Token {
+  id        Int       @id @default(autoincrement())
+  type      TokenType @unique
+  balance   Int       @default(0)
+  updatedAt DateTime  @updatedAt
+}
+
+enum DonationStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model Donation {
+  id        Int             @id @default(autoincrement())
+  user      User            @relation(fields: [userId], references: [id])
+  userId    Int
+  amount    Int
+  status    DonationStatus  @default(PENDING)
+  createdAt DateTime        @default(now())
+}
