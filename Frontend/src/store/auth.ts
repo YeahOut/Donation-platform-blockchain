@@ -1,0 +1,82 @@
+import { create } from 'zustand';
+
+export type UserProfile = {
+  id: number;
+  name: string;
+  username: string;
+  balance: number;
+};
+
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:4000';
+
+async function api<T>(path: string, opts: RequestInit = {}, token?: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    let message = 'Request failed';
+    try {
+      const data = await res.json();
+      message = (data as any)?.message || message;
+    } catch {}
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+export type AuthState = {
+  token: string | null;
+  profile: UserProfile | null;
+  login: (username: string, password: string) => Promise<void>;
+  fetchMe: () => Promise<void>;
+  logout: () => void;
+};
+
+export const useAuthStore = create<AuthState>((set, get) => ({
+  token: null,
+  profile: null,
+  async login(username, password) {
+    const data = await api<{ token: string; name: string; username: string }>(
+      '/api/login',
+      { method: 'POST', body: JSON.stringify({ username, password }) }
+    );
+    set({ token: data.token });
+    await get().fetchMe();
+  },
+  async fetchMe() {
+    const token = get().token;
+    if (!token) return;
+    const me = await api<UserProfile>('/api/me', { method: 'GET' }, token);
+    set({ profile: me });
+  },
+  logout() {
+    set({ token: null, profile: null });
+  },
+}));
+
+export async function fetchStats() {
+  return api<{ totalAmount: number; totalDonors: number }>('/api/stats');
+}
+
+export async function donate(amount: number, token: string) {
+  return api<{ donationId: number; status: string }>(
+    '/api/donate',
+    { method: 'POST', body: JSON.stringify({ amount }) },
+    token
+  );
+}
+
+export async function settleDonation(donationId: number, status: 'SUCCESS' | 'FAILED', token: string) {
+  return api<{ id: number; status: string }>(
+    `/api/donation/${donationId}/settle`,
+    { method: 'POST', body: JSON.stringify({ status }) },
+    token
+  );
+}
+
+

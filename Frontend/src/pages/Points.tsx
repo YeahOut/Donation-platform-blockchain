@@ -1,5 +1,7 @@
 import StatusBar from '../components/StatusBar';
 import TopHeader from '../components/TopHeader';
+import { useEffect } from 'react';
+import { useAuthStore } from '../store/auth';
 type Action = {
   key: string;
   label: string;
@@ -20,8 +22,12 @@ const actions: Action[] = [
 ];
 
 export default function Points() {
-  const name = '몰리';
-  const myPoint = '1000P';
+  const token = useAuthStore((s) => s.token);
+  const profile = useAuthStore((s) => s.profile);
+  const fetchMe = useAuthStore((s) => s.fetchMe);
+  useEffect(() => { if (token && !profile) { fetchMe().catch(()=>{}); } }, [token, profile]);
+  const name = profile?.name ?? '고객';
+  const myPoint = `${(profile?.balance ?? 0).toLocaleString()}P`;
   const goTo = (path: string) => {
     window.history.pushState({}, '', path);
     // Programmatic navigation for SPA: dispatch a popstate for react-router

@@ -1,11 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import StatusBar from '../components/StatusBar';
 import TopHeader from '../components/TopHeader';
+import { donate, settleDonation, useAuthStore } from '../store/auth';
+import { useNavigate } from 'react-router-dom';
 
 export default function ConvertPoints() {
-  const availablePoints = 183;
+  const navigate = useNavigate();
+  const token = useAuthStore((s) => s.token);
+  const profile = useAuthStore((s) => s.profile);
+  const fetchMe = useAuthStore((s) => s.fetchMe);
+  useEffect(() => { if (token && !profile) { fetchMe().catch(()=>{}); } }, [token, profile]);
+  const availablePoints = profile?.balance ?? 0;
   const [amount, setAmount] = useState<number | ''>('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <div className="mx-auto max-w-[390px] pb-24">
       <StatusBar />
@@ -64,9 +72,24 @@ export default function ConvertPoints() {
 
       {/* CTA */}
       <div className="px-4 pt-4">
+        {error && <div className="px-1 text-[13px] text-red-600">{error}</div>}
         <button
           className="w-full rounded-xl bg-[#1977F3] py-3 text-center text-[16px] font-semibold text-white active:bg-[#166ad6]"
-          onClick={() => setShowSuccess(true)}
+          onClick={async () => {
+            if (!token) { navigate('/'); return; }
+            if (amount === '' || amount <= 0) return;
+            if (amount > availablePoints) return;
+            try {
+              setError(null);
+              const d = await donate(amount, token);
+              // 즉시 성공 처리하여 통계 반영
+              await settleDonation(d.donationId, 'SUCCESS', token);
+              await fetchMe();
+              setShowSuccess(true);
+            } catch (e: any) {
+              setError(e?.message || '기부에 실패했습니다.');
+            }
+          }}
         >
           포인트 기부하기
         </button>

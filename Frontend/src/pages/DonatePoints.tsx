@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import StatusBar from '../components/StatusBar';
 import TopHeader from '../components/TopHeader';
+import { fetchStats } from '../store/auth';
 
 export default function DonatePoints() {
   const [amount, setAmount] = useState(1000);
+  const [stats, setStats] = useState<{ totalAmount: number; totalDonors: number } | null>(null);
+  useEffect(() => {
+    fetchStats().then(setStats).catch(()=>{});
+  }, []);
   return (
     <div className="mx-auto max-w-[390px] pb-24">
       <StatusBar />
@@ -26,11 +31,11 @@ export default function DonatePoints() {
       <div className="mx-4 mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-[#F3F7FB] p-4">
         <div>
           <div className="text-[13px] text-grayText">누적 기부금</div>
-          <div className="mt-1 text-[16px] font-semibold">84,679,371P</div>
+          <div className="mt-1 text-[16px] font-semibold">{(stats?.totalAmount ?? 0).toLocaleString()}P</div>
         </div>
         <div>
           <div className="text-[13px] text-grayText">누적 기부자</div>
-          <div className="mt-1 text-[16px] font-semibold">2,384 명</div>
+          <div className="mt-1 text-[16px] font-semibold">{(stats?.totalDonors ?? 0).toLocaleString()} 명</div>
         </div>
       </div>
 
