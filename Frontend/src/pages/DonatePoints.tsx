@@ -4,7 +4,6 @@ import TopHeader from '../components/TopHeader';
 import { fetchStats } from '../store/auth';
 
 export default function DonatePoints() {
-  const [amount, setAmount] = useState(1000);
   const [stats, setStats] = useState<{ totalAmount: number; totalDonors: number } | null>(null);
   useEffect(() => {
     fetchStats().then(setStats).catch(()=>{});
