@@ -42,7 +42,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   async login(username, password) {
     const data = await api<{ token: string; name: string; username: string }>(
-      '/api/login',
+      '/login',
       { method: 'POST', body: JSON.stringify({ username, password }) }
     );
     set({ token: data.token });
@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   async fetchMe() {
     const token = get().token;
     if (!token) return;
-    const me = await api<UserProfile>('/api/me', { method: 'GET' }, token);
+    const me = await api<UserProfile>('/me', { method: 'GET' }, token);
     set({ profile: me });
   },
   logout() {
@@ -60,12 +60,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 }));
 
 export async function fetchStats() {
-  return api<{ totalAmount: number; totalDonors: number }>('/api/stats');
+  return api<{ totalAmount: number; totalDonors: number }>('/stats');
 }
 
 export async function donate(amount: number, token: string) {
   return api<{ donationId: number; status: string }>(
-    '/api/donate',
+    '/donate',
     { method: 'POST', body: JSON.stringify({ amount }) },
     token
   );
@@ -73,7 +73,7 @@ export async function donate(amount: number, token: string) {
 
 export async function settleDonation(donationId: number, status: 'SUCCESS' | 'FAILED', token: string) {
   return api<{ id: number; status: string }>(
-    `/api/donation/${donationId}/settle`,
+    `/donation/${donationId}/settle`,
     { method: 'POST', body: JSON.stringify({ status }) },
     token
   );
