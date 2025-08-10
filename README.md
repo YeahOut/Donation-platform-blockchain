@@ -14,7 +14,7 @@
 - Swagger : http://3.34.135.57:4000/api/docs/#/
 - Token 확인 주소 : https://sepolia.etherscan.io/address/0x50C371Db60A86E634974beEB1da297721119cBe8#tokentxns
 - 트랜잭션 확인 주소 : https://sepolia.etherscan.io/address/0xc06424216b12c20528e7e82ea79e36bb9a83dd1c
-- 데모영상 : [🎬 데모 영상 보기](https://youtu.be/YJNKwx4dKas)
+- 데모영상 : [🎬 데모 영상 보기](https://youtu.be/SXpydQowh7E)
 - 서비스 소개글 : https://yeah-out.notion.site/24b116366aba8013b533fb6714810f73?source=copy_link
 
 
