@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+// 토큰저장
+
 export type UserProfile = {
   id: number;
   name: string;

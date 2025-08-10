@@ -110,7 +110,7 @@ export default function ConvertPoints() {
         <div className="text-[15px] font-semibold">포인트 기부하기 안내</div>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-[13px] leading-6 text-[#4A5568]">
           <li>보유한 포인트를 원하는 금액만큼 토큰으로 전환하여 기부합니다.</li>
-          <li>토큰 전환 후 기부가 완료되면, 해당 내역은 블록체인에 기록되어 누구나 확인할 수 있습니다.</li>
+          <li>토큰 전환 후 기부가 완료되면 해당 내역은 블록체인에 기록되어 누구나 확인할 수 있습니다.</li>
           <li>모든 기부 금액은 수수료를 최소화하여 전액 기부처에 전달됩니다.</li>
           <li>기부 취소 및 환불은 진행되지 않으니 금액을 신중히 입력해 주세요.</li>
         </ul>
