@@ -10,6 +10,7 @@ const prisma_1 = require("../generated/prisma");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const zod_1 = require("zod");
+const blockchain_1 = require("./blockchain");
 const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
 const swagger_1 = require("./swagger");
 dotenv_1.default.config();
@@ -52,19 +53,26 @@ app.post('/api/login', async (req, res) => {
 });
 // 2. 누적 기부금 및 누적 기부자 가져오는 api
 app.get('/api/stats', async (_req, res) => {
-    const totalSuccessDonations = await prisma.donation.aggregate({
-        _sum: { amount: true },
-        where: { status: prisma_1.DonationStatus.SUCCESS },
-    });
-    const numDonors = await prisma.donation.groupBy({
-        by: ['userId'],
-        where: { status: prisma_1.DonationStatus.SUCCESS },
-        _count: { userId: true },
-    });
-    res.json({
-        totalAmount: totalSuccessDonations._sum.amount ?? 0,
-        totalDonors: numDonors.length,
-    });
+    try {
+        const chain = await (0, blockchain_1.readOnchainStats)();
+        return res.json(chain);
+    }
+    catch {
+        // fallback to DB when chain not configured
+        const totalSuccessDonations = await prisma.donation.aggregate({
+            _sum: { amount: true },
+            where: { status: prisma_1.DonationStatus.SUCCESS },
+        });
+        const numDonors = await prisma.donation.groupBy({
+            by: ['userId'],
+            where: { status: prisma_1.DonationStatus.SUCCESS },
+            _count: { userId: true },
+        });
+        return res.json({
+            totalAmount: totalSuccessDonations._sum.amount ?? 0,
+            totalDonors: numDonors.length,
+        });
+    }
 });
 // 3. 사용자 이름 및 포인트 내역 가져오는 api
 app.get('/api/me', authMiddleware, async (req, res) => {
@@ -150,9 +158,12 @@ app.post('/api/donation/:id/settle', authMiddleware, async (req, res) => {
     if (donation.status !== prisma_1.DonationStatus.PENDING)
         return res.status(400).json({ message: 'Already settled' });
     try {
-        await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx) => {
             if (status === 'SUCCESS') {
                 await tx.donation.update({ where: { id: donationId }, data: { status: prisma_1.DonationStatus.SUCCESS } });
+                const user = await tx.user.findUnique({ where: { id: donation.userId } });
+                const userKey = `user:${user?.username || donation.userId}`;
+                return { success: true, userKey, amount: donation.amount };
             }
             else {
                 // 실패: 포인트 환급 + 토큰 롤백
@@ -166,9 +177,19 @@ app.post('/api/donation/:id/settle', authMiddleware, async (req, res) => {
                     throw new Error('Donation token insufficient for refund');
                 await tx.token.update({ where: { id: bank.id }, data: { balance: bank.balance - donation.amount } });
                 await tx.token.update({ where: { id: dtk.id }, data: { balance: dtk.balance + donation.amount } });
+                return { success: false };
             }
-        });
-        res.json({ id: donationId, status });
+        }, { timeout: 15000 });
+        let chainHashes = null;
+        if (result.success) {
+            try {
+                chainHashes = await (0, blockchain_1.onchainRecordDonation)(result.userKey, result.amount);
+            }
+            catch {
+                chainHashes = null;
+            }
+        }
+        res.json({ id: donationId, status, tx: chainHashes });
     }
     catch (e) {
         res.status(400).json({ message: e.message || 'Settle failed' });

@@ -69,7 +69,10 @@ export default function DonatePoints() {
       <div className="fixed bottom-8 left-1/2 w-full max-w-[390px] -translate-x-1/2 px-4">
         <button
           className="w-full rounded-xl bg-[#1977F3] py-3 text-[16px] font-semibold text-white shadow active:bg-[#166ad6]"
-          onClick={() => window.history.pushState({}, '', '/convert') || window.dispatchEvent(new PopStateEvent('popstate'))}
+          onClick={() => {
+            window.history.pushState({}, '', '/convert');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }}
         >
           포인트 기부하기
         </button>

@@ -5,6 +5,7 @@ import { PrismaClient, DonationStatus } from '../generated/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+import { onchainRecordDonation, readOnchainStats } from './blockchain';
 import swaggerUi from 'swagger-ui-express';
 import { openApiDocument } from './swagger';
 
@@ -54,19 +55,25 @@ app.post('/api/login', async (req: Request, res: Response) => {
 
 // 2. 누적 기부금 및 누적 기부자 가져오는 api
 app.get('/api/stats', async (_req: Request, res: Response) => {
-  const totalSuccessDonations = await prisma.donation.aggregate({
-    _sum: { amount: true },
-    where: { status: DonationStatus.SUCCESS },
-  });
-  const numDonors = await prisma.donation.groupBy({
-    by: ['userId'],
-    where: { status: DonationStatus.SUCCESS },
-    _count: { userId: true },
-  });
-  res.json({
-    totalAmount: totalSuccessDonations._sum.amount ?? 0,
-    totalDonors: numDonors.length,
-  });
+  try {
+    const chain = await readOnchainStats();
+    return res.json(chain);
+  } catch {
+    // fallback to DB when chain not configured
+    const totalSuccessDonations = await prisma.donation.aggregate({
+      _sum: { amount: true },
+      where: { status: DonationStatus.SUCCESS },
+    });
+    const numDonors = await prisma.donation.groupBy({
+      by: ['userId'],
+      where: { status: DonationStatus.SUCCESS },
+      _count: { userId: true },
+    });
+    return res.json({
+      totalAmount: totalSuccessDonations._sum.amount ?? 0,
+      totalDonors: numDonors.length,
+    });
+  }
 });
 
 // 3. 사용자 이름 및 포인트 내역 가져오는 api
@@ -153,22 +160,32 @@ app.post('/api/donation/:id/settle', authMiddleware, async (req: AuthRequest, re
     return res.status(400).json({ message: 'Already settled' });
 
   try {
-    await prisma.$transaction(async (tx) => {
-      if (status === 'SUCCESS') {
-        await tx.donation.update({ where: { id: donationId }, data: { status: DonationStatus.SUCCESS } });
-      } else {
-        // 실패: 포인트 환급 + 토큰 롤백
-        await tx.donation.update({ where: { id: donationId }, data: { status: DonationStatus.FAILED } });
-        await tx.pointTransaction.create({ data: { userId: donation.userId, amount: donation.amount, note: 'donation refund' } });
-        const bank = await tx.token.findUnique({ where: { type: 'DONATION' } });
-        const dtk = await tx.token.findUnique({ where: { type: 'BANK' } });
-        if (!bank || !dtk) throw new Error('Tokens not initialized');
-        if (bank.balance < donation.amount) throw new Error('Donation token insufficient for refund');
-        await tx.token.update({ where: { id: bank.id }, data: { balance: bank.balance - donation.amount } });
-        await tx.token.update({ where: { id: dtk.id }, data: { balance: dtk.balance + donation.amount } });
+    if (status === 'SUCCESS') {
+      // DB 상태만 빠르게 갱신 (트랜잭션 불필요)
+      await prisma.donation.update({ where: { id: donationId }, data: { status: DonationStatus.SUCCESS } });
+      const user = await prisma.user.findUnique({ where: { id: donation.userId } });
+      const userKey = `user:${user?.username || donation.userId}`;
+      let chainHashes: { mintTxHash: string; recordTxHash: string } | null = null;
+      try {
+        chainHashes = await onchainRecordDonation(userKey, donation.amount);
+      } catch {
+        chainHashes = null;
       }
-    });
-    res.json({ id: donationId, status });
+      return res.json({ id: donationId, status, tx: chainHashes });
+    } else {
+      // 실패: 토큰/포인트 롤백. 잔액 체크 후 배치 트랜잭션으로 빠르게 처리
+      const bank = await prisma.token.findUnique({ where: { type: 'DONATION' } });
+      const dtk = await prisma.token.findUnique({ where: { type: 'BANK' } });
+      if (!bank || !dtk) throw new Error('Tokens not initialized');
+      if (bank.balance < donation.amount) throw new Error('Donation token insufficient for refund');
+      await prisma.$transaction([
+        prisma.donation.update({ where: { id: donationId }, data: { status: DonationStatus.FAILED } }),
+        prisma.pointTransaction.create({ data: { userId: donation.userId, amount: donation.amount, note: 'donation refund' } }),
+        prisma.token.update({ where: { id: bank.id }, data: { balance: bank.balance - donation.amount } }),
+        prisma.token.update({ where: { id: dtk.id }, data: { balance: dtk.balance + donation.amount } }),
+      ]);
+      return res.json({ id: donationId, status });
+    }
   } catch (e: any) {
     res.status(400).json({ message: e.message || 'Settle failed' });
   }
