@@ -38,13 +38,14 @@ export type AuthState = {
 };
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  token: null,
+  token: localStorage.getItem('auth_token'),
   profile: null,
   async login(username, password) {
     const data = await api<{ token: string; name: string; username: string }>(
       '/login',
       { method: 'POST', body: JSON.stringify({ username, password }) }
     );
+    localStorage.setItem('auth_token', data.token);
     set({ token: data.token });
     await get().fetchMe();
   },
@@ -55,6 +56,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ profile: me });
   },
   logout() {
+    localStorage.removeItem('auth_token');
     set({ token: null, profile: null });
   },
 }));
