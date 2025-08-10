@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import StatusBar from '../components/StatusBar';
 import TopHeader from '../components/TopHeader';
 import { donate, settleDonation, useAuthStore } from '../store/auth';
@@ -9,11 +9,12 @@ export default function ConvertPoints() {
   const token = useAuthStore((s) => s.token);
   const profile = useAuthStore((s) => s.profile);
   const fetchMe = useAuthStore((s) => s.fetchMe);
-  useEffect(() => { if (token && !profile) { fetchMe().catch(()=>{}); } }, [token, profile]);
   const availablePoints = profile?.balance ?? 0;
   const [amount, setAmount] = useState<number | ''>('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
   return (
     <div className="mx-auto max-w-[390px] pb-24">
       <StatusBar />
@@ -41,6 +42,7 @@ export default function ConvertPoints() {
             value={amount}
             onChange={(e)=> setAmount(e.target.value === '' ? '' : Number(e.target.value))}
             className="w-full outline-none"
+            disabled={isLoading}
           />
           <span className="text-[16px] font-semibold text-[#4A5568]">P</span>
         </div>
@@ -53,8 +55,9 @@ export default function ConvertPoints() {
           ].map((b) => (
             <button
               key={b.label}
-              className="rounded-lg border border-[#E2E8F0] bg-white py-2 text-[13px] text-[#1F2A37] active:bg-blue-50"
+              className="rounded-lg border border-[#E2E8F0] bg-white py-2 text-[13px] text-[#1F2A37] active:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
+                if (isLoading) return;
                 if (b.inc === 'all') {
                   setAmount(availablePoints);
                 } else {
@@ -63,6 +66,7 @@ export default function ConvertPoints() {
                   setAmount(next);
                 }
               }}
+              disabled={isLoading}
             >
               {b.label}
             </button>
@@ -74,13 +78,16 @@ export default function ConvertPoints() {
       <div className="px-4 pt-4">
         {error && <div className="px-1 text-[13px] text-red-600">{error}</div>}
         <button
-          className="w-full rounded-xl bg-[#1977F3] py-3 text-center text-[16px] font-semibold text-white active:bg-[#166ad6]"
+          className="w-full rounded-xl bg-[#1977F3] py-3 text-center text-[16px] font-semibold text-white active:bg-[#166ad6] disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={async () => {
+            if (isLoading) return;
             if (!token) { navigate('/'); return; }
             if (amount === '' || amount <= 0) return;
             if (amount > availablePoints) return;
+            
+            setIsLoading(true);
+            setError(null);
             try {
-              setError(null);
               const d = await donate(amount, token);
               // 즉시 성공 처리하여 통계 반영
               await settleDonation(d.donationId, 'SUCCESS', token);
@@ -88,10 +95,13 @@ export default function ConvertPoints() {
               setShowSuccess(true);
             } catch (e: any) {
               setError(e?.message || '기부에 실패했습니다.');
+            } finally {
+              setIsLoading(false);
             }
           }}
+          disabled={isLoading}
         >
-          포인트 기부하기
+          {isLoading ? '처리 중...' : '포인트 기부하기'}
         </button>
       </div>
 
